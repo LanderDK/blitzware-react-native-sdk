@@ -1,0 +1,32 @@
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import 'react-native-reanimated';
+
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { BlitzWareAuthProvider } from 'blitzware-react-native-sdk';
+
+export const unstable_settings = {
+  anchor: '(tabs)',
+};
+
+export default function RootLayout() {
+  const colorScheme = useColorScheme();
+
+  const blitzWareConfig = {
+    clientId: 'test-client-id', // Test client ID  
+    redirectUri: 'blitzwarereactnativeexample://oauth', // Using the app scheme from app.json
+  };
+
+  return (
+    <BlitzWareAuthProvider config={blitzWareConfig}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        </Stack>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </BlitzWareAuthProvider>
+  );
+}

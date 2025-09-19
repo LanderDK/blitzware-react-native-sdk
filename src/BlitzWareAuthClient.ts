@@ -1,15 +1,12 @@
 /**
  * BlitzWare React Native SDK - OAuth 2.0 Client
  * 
- * This SDK integrates with BlitzWare's OAuth 2.0 authorization server.
- * It automatically discovers endpoint configuration from:
- * https://auth.blitzware.xyz/api/auth/.well-known/openid_configuration
- * 
- * Note: Despite the filename containing "openid_configuration", this is 
- * a standard OAuth 2.0 Authorization Server Metadata endpoint (RFC 8414).
- * BlitzWare implements OAuth 2.0, not OpenID Connect.
+ * This SDK integrates with BlitzWare's OAuth 2.0 authorization ser            body: JSON.stringify({
+              client_id: this.config.clientId
+            }),.
+ * Uses expo-auth-session for cross-platform compatibility (iOS, Android, Web)
  */
-import { authorize, AuthConfiguration } from 'react-native-app-auth';
+import * as AuthSession from 'expo-auth-session';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import {
@@ -33,25 +30,31 @@ const STORAGE_KEYS = {
 const KEYCHAIN_SERVICE = 'BlitzWareAuth';
 
 export class BlitzWareAuthClient {
-  private authConfig: AuthConfiguration;
+  private config: BlitzWareConfig;
+  private discovery: AuthSession.DiscoveryDocument | null = null;
 
   constructor(config: BlitzWareConfig) {
-    
-    // Default to "code" for mobile security, but allow "token" if explicitly requested
-    const responseType = config.responseType || "code";
-    
-    this.authConfig = {
-      issuer: 'https://auth.blitzware.xyz/api/auth',
-      clientId: config.clientId,
-      redirectUrl: config.redirectUri,
-      scopes: [], // Empty scopes - your OAuth 2.0 service doesn't require specific scopes
-      additionalParameters: {},
-      useNonce: false, // Not needed for OAuth 2.0 (OpenID Connect feature)
-      usePKCE: responseType === "code", // Use PKCE only for authorization code flow
-      skipCodeExchange: responseType === "token", // Skip code exchange for implicit flow
-      additionalHeaders: {},
-      dangerouslyAllowInsecureHttpRequests: false
-    };
+    this.config = config;
+  }
+
+  /**
+   * Initialize the discovery document
+   */
+  private async getDiscovery(): Promise<AuthSession.DiscoveryDocument> {
+    if (!this.discovery) {
+      try {
+        // Try to fetch discovery document
+        this.discovery = await AuthSession.fetchDiscoveryAsync('https://auth.blitzware.xyz/api/auth');
+      } catch (error) {
+        // Fallback to manual configuration if discovery fails
+        this.discovery = {
+          authorizationEndpoint: 'https://auth.blitzware.xyz/api/auth/authorize',
+          tokenEndpoint: 'https://auth.blitzware.xyz/api/auth/token',
+          revocationEndpoint: 'https://auth.blitzware.xyz/api/auth/revoke',
+        };
+      }
+    }
+    return this.discovery;
   }
 
   /**
@@ -59,20 +62,46 @@ export class BlitzWareAuthClient {
    */
   async login(): Promise<BlitzWareUser> {
     try {
-      const result: AuthorizeResult = await authorize(this.authConfig);
+      const discovery = await this.getDiscovery();
       
+      // Create authorization request
+      const request = new AuthSession.AuthRequest({
+        clientId: this.config.clientId,
+        scopes: [],
+        redirectUri: this.config.redirectUri,
+        responseType: AuthSession.ResponseType.Code,
+        usePKCE: true,
+      });
+
+      // Prompt for authorization
+      const result = await request.promptAsync(discovery);
+
+      if (result.type !== 'success') {
+        throw new Error('Authorization was cancelled or failed');
+      }
+
+      // Exchange code for tokens
+      const tokenResult = await AuthSession.exchangeCodeAsync(
+        {
+          clientId: this.config.clientId,
+          code: result.params.code,
+          redirectUri: this.config.redirectUri,
+          extraParams: request.codeVerifier ? { code_verifier: request.codeVerifier } : {},
+        },
+        discovery
+      );
+
       // Store tokens securely
       await this.storeTokens({
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        // Note: ID tokens not supported by BlitzWare OAuth 2.0 service
-        expiresAt: result.accessTokenExpirationDate 
-          ? new Date(result.accessTokenExpirationDate).getTime()
+        accessToken: tokenResult.accessToken,
+        refreshToken: tokenResult.refreshToken || undefined,
+        expiresAt: tokenResult.expiresIn 
+          ? Date.now() + (tokenResult.expiresIn * 1000)
           : undefined
       });
 
       // Get user information
-      const user = await this.fetchUserInfo(result.accessToken);
+      const user = await this.fetchUserInfo(tokenResult.accessToken);
       await this.storeUser(user);
 
       return user;
@@ -97,7 +126,7 @@ export class BlitzWareAuthClient {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              client_id: this.authConfig.clientId
+              client_id: this.config.clientId
             })
           });
           
@@ -151,36 +180,27 @@ export class BlitzWareAuthClient {
         throw new BlitzWareError('No refresh token available', AuthErrorCode.REFRESH_FAILED);
       }
 
-      // Manual refresh token request like other SDKs
-      const response = await fetch('https://auth.blitzware.xyz/api/auth/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+      const discovery = await this.getDiscovery();
+
+      // Use expo-auth-session for token refresh
+      const tokenResult = await AuthSession.refreshAsync(
+        {
+          clientId: this.config.clientId,
+          refreshToken,
         },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken,
-          client_id: this.authConfig.clientId
-        }).toString()
-      });
-
-      if (!response.ok) {
-        throw new Error(`Token refresh failed: ${response.status}`);
-      }
-
-      const result = await response.json();
+        discovery
+      );
 
       // Store new tokens
       await this.storeTokens({
-        accessToken: result.access_token,
-        refreshToken: result.refresh_token || refreshToken,
-        // Note: ID tokens not supported by BlitzWare OAuth 2.0 service
-        expiresAt: result.expires_in 
-          ? Date.now() + (result.expires_in * 1000)
+        accessToken: tokenResult.accessToken,
+        refreshToken: tokenResult.refreshToken || refreshToken,
+        expiresAt: tokenResult.expiresIn 
+          ? Date.now() + (tokenResult.expiresIn * 1000)
           : undefined
       });
 
-      return result.access_token;
+      return tokenResult.accessToken;
     } catch (error) {
       // If refresh fails, clear stored tokens
       await this.clearStorage();

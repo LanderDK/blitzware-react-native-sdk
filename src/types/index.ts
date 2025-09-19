@@ -82,6 +82,7 @@ export enum AuthErrorCode {
   TOKEN_EXPIRED = 'token_expired',
   REFRESH_FAILED = 'refresh_failed',
   LOGOUT_FAILED = 'logout_failed',
+  USER_INFO_FAILED = 'user_info_failed',
   KEYCHAIN_ERROR = 'keychain_error',
   UNKNOWN_ERROR = 'unknown_error'
 }
