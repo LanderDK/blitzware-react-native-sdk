@@ -1,6 +1,6 @@
 {
   "name": "blitzware-react-native-sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "BlitzWare authentication SDK for React Native applications",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
