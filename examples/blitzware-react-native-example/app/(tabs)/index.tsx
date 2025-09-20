@@ -1,33 +1,30 @@
-import React from 'react';
-import { StyleSheet, View, Alert } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Pressable } from 'react-native';
-import { useBlitzWareAuth } from 'blitzware-react-native-sdk';
+import React from "react";
+import { StyleSheet, Pressable, Alert } from "react-native";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { useBlitzWareAuth } from "blitzware-react-native-sdk";
 
 export default function HomeScreen() {
-  const { login, logout, isAuthenticated, user, isLoading, error } = useBlitzWareAuth();
+  const { login, logout, isAuthenticated, user, isLoading, error, hasRole } =
+    useBlitzWareAuth();
 
   const handleLogin = async () => {
-    console.log('Login button pressed');
-    Alert.alert('Info', 'Attempting to log in...');
+    console.log("Login button pressed");
     try {
-      console.log('Calling login method...');
+      console.log("Calling login method...");
       const result = await login();
-      console.log('Login result:', result);
-      Alert.alert('Success', 'Logged in successfully!');
+      console.log("Login result:", result);
     } catch (error) {
-      console.error('Login error:', error);
-      Alert.alert('Error', `Login failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Login error:", error);
     }
   };
 
   const handleLogout = async () => {
     try {
       await logout();
-      Alert.alert('Success', 'Logged out successfully!');
+      console.log("Logout successful");
     } catch (error) {
-      Alert.alert('Error', `Logout failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Logout error:", error);
     }
   };
 
@@ -39,32 +36,48 @@ export default function HomeScreen() {
 
       <ThemedView style={styles.statusContainer}>
         <ThemedText type="subtitle">Authentication Status:</ThemedText>
-        <ThemedText>{isLoading ? 'Loading...' : isAuthenticated ? 'Authenticated' : 'Not Authenticated'}</ThemedText>
-        
+        <ThemedText>
+          {isLoading
+            ? "Loading..."
+            : isAuthenticated
+              ? "Authenticated"
+              : "Not Authenticated"}
+        </ThemedText>
+
         {error && (
           <ThemedView style={styles.errorContainer}>
             <ThemedText type="subtitle">Error:</ThemedText>
             <ThemedText>{error.message}</ThemedText>
           </ThemedView>
         )}
-        
+
         {user && (
           <ThemedView style={styles.userContainer}>
             <ThemedText type="subtitle">User Info:</ThemedText>
             <ThemedText>ID: {user.sub}</ThemedText>
-            <ThemedText>Email: {user.email || 'N/A'}</ThemedText>
-            <ThemedText>Name: {user.name || 'N/A'}</ThemedText>
+            <ThemedText>Email: {user.email || "N/A"}</ThemedText>
+            <ThemedText>Name: {user.name || "N/A"}</ThemedText>
           </ThemedView>
         )}
       </ThemedView>
 
       <ThemedView style={styles.buttonContainer}>
         {!isAuthenticated ? (
-          <Pressable style={styles.button} onPress={handleLogin} disabled={isLoading}>
-            <ThemedText style={styles.buttonText}>Login with BlitzWare</ThemedText>
+          <Pressable
+            style={styles.button}
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            <ThemedText style={styles.buttonText}>
+              Login with BlitzWare
+            </ThemedText>
           </Pressable>
         ) : (
-          <Pressable style={styles.button} onPress={handleLogout} disabled={isLoading}>
+          <Pressable
+            style={styles.button}
+            onPress={handleLogout}
+            disabled={isLoading}
+          >
             <ThemedText style={styles.buttonText}>Logout</ThemedText>
           </Pressable>
         )}
@@ -77,44 +90,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   titleContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 40,
   },
   statusContainer: {
     marginBottom: 40,
     padding: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: "rgba(0,0,0,0.05)",
   },
   userContainer: {
     marginTop: 20,
     padding: 15,
     borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    backgroundColor: "rgba(0,0,0,0.03)",
   },
   errorContainer: {
     marginTop: 20,
     padding: 15,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,0,0,0.1)',
+    backgroundColor: "rgba(255,0,0,0.1)",
   },
   buttonContainer: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     paddingHorizontal: 30,
     paddingVertical: 15,
     borderRadius: 8,
     minWidth: 200,
-    alignItems: 'center',
+    alignItems: "center",
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

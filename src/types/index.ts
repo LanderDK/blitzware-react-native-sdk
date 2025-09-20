@@ -83,6 +83,6 @@ export enum AuthErrorCode {
   REFRESH_FAILED = 'refresh_failed',
   LOGOUT_FAILED = 'logout_failed',
   USER_INFO_FAILED = 'user_info_failed',
-  KEYCHAIN_ERROR = 'keychain_error',
+  STORAGE_ERROR = 'storage_error',
   UNKNOWN_ERROR = 'unknown_error'
 }

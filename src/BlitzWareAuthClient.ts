@@ -8,7 +8,7 @@
  */
 import * as AuthSession from 'expo-auth-session';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Keychain from 'react-native-keychain';
+import * as SecureStore from 'expo-secure-store';
 import {
   BlitzWareConfig,
   BlitzWareUser,
@@ -27,7 +27,10 @@ const STORAGE_KEYS = {
   TOKEN_EXPIRY: '@blitzware/token_expiry'
 } as const;
 
-const KEYCHAIN_SERVICE = 'BlitzWareAuth';
+const SECURE_STORE_KEYS = {
+  ACCESS_TOKEN: 'blitzware_access_token',
+  REFRESH_TOKEN: 'blitzware_refresh_token'
+} as const;
 
 export class BlitzWareAuthClient {
   private config: BlitzWareConfig;
@@ -281,19 +284,17 @@ export class BlitzWareAuthClient {
    */
   private async storeTokens(tokens: TokenSet): Promise<void> {
     try {
-      // Store sensitive tokens in Keychain
+      // Store sensitive tokens in SecureStore
       if (tokens.accessToken) {
-        await Keychain.setInternetCredentials(
-          `${KEYCHAIN_SERVICE}_access`,
-          'access_token',
+        await SecureStore.setItemAsync(
+          SECURE_STORE_KEYS.ACCESS_TOKEN,
           tokens.accessToken
         );
       }
 
       if (tokens.refreshToken) {
-        await Keychain.setInternetCredentials(
-          `${KEYCHAIN_SERVICE}_refresh`,
-          'refresh_token',
+        await SecureStore.setItemAsync(
+          SECURE_STORE_KEYS.REFRESH_TOKEN,
           tokens.refreshToken
         );
       }
@@ -308,7 +309,7 @@ export class BlitzWareAuthClient {
         await AsyncStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, tokens.expiresAt.toString());
       }
     } catch (error) {
-      throw this.handleError(error, AuthErrorCode.KEYCHAIN_ERROR);
+      throw this.handleError(error, AuthErrorCode.STORAGE_ERROR);
     }
   }
 
@@ -328,8 +329,7 @@ export class BlitzWareAuthClient {
    */
   private async getStoredAccessToken(): Promise<string | null> {
     try {
-      const credentials = await Keychain.getInternetCredentials(`${KEYCHAIN_SERVICE}_access`);
-      return credentials ? credentials.password : null;
+      return await SecureStore.getItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN);
     } catch (error) {
       return null;
     }
@@ -340,8 +340,7 @@ export class BlitzWareAuthClient {
    */
   private async getStoredRefreshToken(): Promise<string | null> {
     try {
-      const credentials = await Keychain.getInternetCredentials(`${KEYCHAIN_SERVICE}_refresh`);
-      return credentials ? credentials.password : null;
+      return await SecureStore.getItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN);
     } catch (error) {
       return null;
     }
@@ -352,9 +351,9 @@ export class BlitzWareAuthClient {
    */
   private async clearStorage(): Promise<void> {
     try {
-      // Clear Keychain
-      await Keychain.resetInternetCredentials(`${KEYCHAIN_SERVICE}_access`);
-      await Keychain.resetInternetCredentials(`${KEYCHAIN_SERVICE}_refresh`);
+      // Clear SecureStore
+      await SecureStore.deleteItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN);
+      await SecureStore.deleteItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN);
 
       // Clear AsyncStorage
       await AsyncStorage.multiRemove([
