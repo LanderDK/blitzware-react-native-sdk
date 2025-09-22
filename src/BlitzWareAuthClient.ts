@@ -13,10 +13,23 @@ import {
   BlitzWareConfig,
   BlitzWareUser,
   TokenSet,
-  AuthorizeResult,
   BlitzWareError,
   AuthErrorCode,
+  TokenIntrospectionResponse,
 } from "./types";
+import axios from "axios";
+import { Buffer } from "buffer";
+
+const BASE_URL = "https://auth.blitzware.xyz/api/auth";
+
+// Configure axios instance with credentials for session support
+const apiClient = axios.create({
+  baseURL: BASE_URL,
+  withCredentials: true, // Include session cookies in all requests
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: "@blitzware/access_token",
@@ -47,16 +60,15 @@ export class BlitzWareAuthClient {
     if (!this.discovery) {
       try {
         // Try to fetch discovery document
-        this.discovery = await AuthSession.fetchDiscoveryAsync(
-          "https://auth.blitzware.xyz/api/auth"
-        );
+        this.discovery = await AuthSession.fetchDiscoveryAsync(BASE_URL);
       } catch (error) {
         // Fallback to manual configuration if discovery fails
         this.discovery = {
-          authorizationEndpoint:
-            "https://auth.blitzware.xyz/api/auth/authorize",
-          tokenEndpoint: "https://auth.blitzware.xyz/api/auth/token",
-          revocationEndpoint: "https://auth.blitzware.xyz/api/auth/revoke",
+          authorizationEndpoint: `${BASE_URL}/authorize`,
+          tokenEndpoint: `${BASE_URL}/token`,
+          revocationEndpoint: `${BASE_URL}/revoke`,
+          userInfoEndpoint: `${BASE_URL}/userinfo`,
+          endSessionEndpoint: `${BASE_URL}/logout`,
         };
       }
     }
@@ -109,7 +121,7 @@ export class BlitzWareAuthClient {
       });
 
       // Get user information
-      const user = await this.fetchUserInfo(tokenResult.accessToken);
+      const user = await this.fetchUserInfo();
       await this.storeUser(user);
 
       return user;
@@ -123,26 +135,15 @@ export class BlitzWareAuthClient {
    */
   async logout(): Promise<void> {
     try {
-      const accessToken = await this.getStoredAccessToken();
+      const accessToken = await this.getStoredToken("access_token");
 
       if (accessToken) {
-        // Call logout endpoint directly like React SDK
         try {
-          const response = await fetch(
-            "https://auth.blitzware.xyz/api/auth/logout",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                client_id: this.config.clientId,
-              }),
-              credentials: "include", // Include cookies for session-based logout
-            }
-          );
+          const response = await apiClient.post("/logout", {
+            client_id: this.config.clientId,
+          });
 
-          if (!response.ok) {
+          if (response.status < 200 || response.status >= 300) {
             console.warn("Logout request failed:", response.status);
           }
         } catch (logoutError) {
@@ -160,10 +161,50 @@ export class BlitzWareAuthClient {
 
   /**
    * Get current access token, refreshing if necessary
+   * This method ensures you always get a valid token if possible
    */
   async getAccessToken(): Promise<string | null> {
     try {
-      const accessToken = await this.getStoredAccessToken();
+      // First check if we have a token locally that appears valid
+      const isLocallyValid = await this.isTokenValidLocally();
+      
+      if (!isLocallyValid) {
+        // Token is expired or missing locally, try to refresh
+        try {
+          return await this.refreshAccessToken();
+        } catch (refreshError) {
+          // Refresh failed, return null
+          return null;
+        }
+      }
+
+      // Now validate with server to be sure
+      const isServerValid = await this.isAuthenticated();
+      
+      if (!isServerValid) {
+        // Server says token is invalid, try to refresh
+        try {
+          return await this.refreshAccessToken();
+        } catch (refreshError) {
+          // Refresh failed, return null
+          return null;
+        }
+      }
+
+      // Return the token
+      return await this.getStoredToken("access_token");
+    } catch (error) {
+      throw this.handleError(error, AuthErrorCode.TOKEN_EXPIRED);
+    }
+  }
+
+  /**
+   * Get current access token without validation (faster, but may be expired)
+   * Use this for non-critical operations or when you handle validation separately
+   */
+  async getAccessTokenFast(): Promise<string | null> {
+    try {
+      const accessToken = await this.getStoredToken("access_token");
       const expiresAt = await AsyncStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRY);
 
       if (!accessToken) {
@@ -172,7 +213,7 @@ export class BlitzWareAuthClient {
 
       // Check if token is expired
       if (expiresAt && Date.now() >= parseInt(expiresAt, 10)) {
-        return await this.refreshAccessToken();
+        return null;
       }
 
       return accessToken;
@@ -186,7 +227,17 @@ export class BlitzWareAuthClient {
    */
   async refreshAccessToken(): Promise<string> {
     try {
-      const refreshToken = await this.getStoredRefreshToken();
+      // First validate the refresh token using introspection
+      const tokenValidation = await this.validateRefreshToken();
+
+      if (!tokenValidation.active) {
+        throw new BlitzWareError(
+          "Refresh token is invalid or expired",
+          AuthErrorCode.REFRESH_FAILED
+        );
+      }
+
+      const refreshToken = await this.getStoredToken("refresh_token");
 
       if (!refreshToken) {
         throw new BlitzWareError(
@@ -224,27 +275,49 @@ export class BlitzWareAuthClient {
   }
 
   /**
-   * Get current authenticated user
+   * Get current authenticated user, validating token and refreshing if needed
+   * Validates token then fetches user info
    */
   async getUser(): Promise<BlitzWareUser | null> {
+    try {
+      // First ensure we have a valid token
+      const accessToken = await this.getAccessToken();
+      
+      if (!accessToken) {
+        return null;
+      }
+
+      // Get user from storage first (for performance)
+      const userJson = await AsyncStorage.getItem(STORAGE_KEYS.USER);
+      let storedUser = userJson ? JSON.parse(userJson) : null;
+
+      // If we have stored user data and token is valid, return it
+      if (storedUser) {
+        return storedUser;
+      }
+
+      // No stored user or need fresh data, fetch from server
+      const user = await this.fetchUserInfo();
+      await this.storeUser(user);
+      
+      return user;
+    } catch (error) {
+      console.warn("Failed to get user:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get current authenticated user from storage only (no server validation)
+   * Use this for UI updates where you don't need fresh data
+   */
+  async getUserFromStorage(): Promise<BlitzWareUser | null> {
     try {
       const userJson = await AsyncStorage.getItem(STORAGE_KEYS.USER);
       return userJson ? JSON.parse(userJson) : null;
     } catch (error) {
       console.warn("Failed to get user from storage:", error);
       return null;
-    }
-  }
-
-  /**
-   * Check if user is currently authenticated
-   */
-  async isAuthenticated(): Promise<boolean> {
-    try {
-      const accessToken = await this.getAccessToken();
-      return !!accessToken;
-    } catch (error) {
-      return false;
     }
   }
 
@@ -269,27 +342,38 @@ export class BlitzWareAuthClient {
   }
 
   /**
-   * Fetch user information from the API
+   * Fetches user information using the stored access token with validation.
+   * Validates the token with the authorization server before fetching user info.
+   * @returns The authenticated user's information.
+   * @throws BlitzWareAuthError if the token is invalid or request fails.
    */
-  private async fetchUserInfo(accessToken: string): Promise<BlitzWareUser> {
+  private async fetchUserInfo(): Promise<BlitzWareUser> {
     try {
-      const response = await fetch(
-        "https://auth.blitzware.xyz/api/auth/userinfo",
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-        }
-      );
+      // First validate the token using introspection
+      const tokenValidation = await this.validateAccessToken();
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch user info: ${response.status}`);
+      if (!tokenValidation.active) {
+        throw new BlitzWareError(
+          "Access token is invalid or expired",
+          AuthErrorCode.TOKEN_EXPIRED
+        );
       }
 
-      return await response.json();
+      // If token is valid, fetch user info
+      const accessToken = await this.getStoredToken("access_token");
+      if (!accessToken) {
+        throw new BlitzWareError(
+          "No access token available",
+          AuthErrorCode.TOKEN_EXPIRED
+        );
+      }
+
+      const response = await apiClient.get("/userinfo", {
+        params: {
+          access_token: accessToken,
+        },
+      });
+      return response.data;
     } catch (error) {
       throw this.handleError(error, AuthErrorCode.NETWORK_ERROR);
     }
@@ -344,22 +428,17 @@ export class BlitzWareAuthClient {
   }
 
   /**
-   * Get stored access token
+   * Get stored token (public method)
    */
-  private async getStoredAccessToken(): Promise<string | null> {
+  async getStoredToken(
+    type: "access_token" | "refresh_token"
+  ): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN);
-    } catch (error) {
-      return null;
-    }
-  }
-
-  /**
-   * Get stored refresh token
-   */
-  private async getStoredRefreshToken(): Promise<string | null> {
-    try {
-      return await SecureStore.getItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN);
+      return await SecureStore.getItemAsync(
+        type === "access_token"
+          ? SECURE_STORE_KEYS.ACCESS_TOKEN
+          : SECURE_STORE_KEYS.REFRESH_TOKEN
+      );
     } catch (error) {
       return null;
     }
@@ -385,6 +464,165 @@ export class BlitzWareAuthClient {
       console.warn("Failed to clear storage:", error);
     }
   }
+
+  /**
+   * Introspects a token to check its validity and get metadata.
+   * Implements RFC 7662 OAuth2 Token Introspection.
+   * @param token - The token to introspect.
+   * @param tokenTypeHint - The type of token being introspected.
+   * @param clientId - The client ID.
+   * @param clientSecret - The client secret (optional for public clients).
+   * @returns Token introspection response.
+   * @throws BlitzWareAuthError if introspection fails.
+   */
+  private introspectToken = async (
+    token: string,
+    tokenTypeHint: "access_token" | "refresh_token"
+  ): Promise<TokenIntrospectionResponse> => {
+    try {
+      const requestBody: {
+        token: string;
+        token_type_hint: string;
+        client_id: string;
+        client_secret?: string;
+      } = {
+        token,
+        token_type_hint: tokenTypeHint,
+        client_id: this.config.clientId,
+      };
+
+      const response = await apiClient.post("/introspect", requestBody);
+
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error, AuthErrorCode.INTROSPECTION_FAILED);
+    }
+  };
+
+  /**
+   * Validates an access token by introspecting it with the authorization server.
+   * This provides authoritative validation from the server.
+   * @param clientId - The client ID.
+   * @param clientSecret - The client secret (optional for public clients).
+   * @returns Promise that resolves to introspection result.
+   * @throws BlitzWareAuthError if validation fails.
+   */
+  private validateAccessToken =
+    async (): Promise<TokenIntrospectionResponse> => {
+      const token = await this.getStoredToken("access_token");
+      if (!token) {
+        return { active: false };
+      }
+
+      try {
+        return await this.introspectToken(token, "access_token");
+      } catch (error) {
+        // If introspection fails, token is considered invalid
+        return { active: false };
+      }
+    };
+
+  /**
+   * Validates a refresh token by introspecting it with the authorization server.
+   * @param clientId - The client ID.
+   * @param clientSecret - The client secret (optional for public clients).
+   * @returns Promise that resolves to introspection result.
+   * @throws BlitzWareAuthError if validation fails.
+   */
+  private validateRefreshToken =
+    async (): Promise<TokenIntrospectionResponse> => {
+      const token = await this.getStoredToken("refresh_token");
+      if (!token) {
+        return { active: false };
+      }
+
+      try {
+        return await this.introspectToken(token, "refresh_token");
+      } catch (error) {
+        // If introspection fails, token is considered invalid
+        return { active: false };
+      }
+    };
+
+  /**
+   * Decodes a JWT and returns its payload as an object.
+   * @param token - The JWT string.
+   * @returns The decoded payload object, or {} if decoding fails.
+   */
+  private parseJwt = (token: string) => {
+    try {
+      if (!token) return {};
+      const parts = token.split(".");
+      if (parts.length !== 3) return {};
+
+      const base64Url = parts[1];
+      // Replace URL-safe characters and add padding if needed
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64.padEnd(
+        base64.length + ((4 - (base64.length % 4)) % 4),
+        "="
+      );
+
+      let jsonPayload: string;
+      if (typeof Buffer !== "undefined") {
+        // Node.js environment
+        const payload = Buffer.from(padded, "base64");
+        jsonPayload = payload.toString("utf8");
+      } else {
+        // Browser environment
+        jsonPayload = atob(padded);
+      }
+
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error(error);
+      return {};
+    }
+  };
+
+  /**
+   * Converts a JWT exp (expiration) value to a Date object.
+   * @param exp - The expiration value (number or string).
+   * @returns The expiration as a Date, or null if invalid.
+   */
+  private parseExp = (exp: number | string) => {
+    if (!exp) return null;
+    if (typeof exp !== "number") exp = Number(exp);
+    if (isNaN(exp)) return null;
+    return new Date(exp * 1000);
+  };
+
+  /**
+   * Checks if the stored access token is valid by validating with the server.
+   * This provides authoritative validation.
+   * @returns True if the token is valid according to the server, false otherwise.
+   */
+  isAuthenticated = async (): Promise<boolean> => {
+    try {
+      const tokenValidation = await this.validateAccessToken();
+      return tokenValidation.active;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  /**
+   * Checks if the stored access token is valid locally (not expired).
+   * This is a quick local check based on JWT expiration.
+   * @returns True if the token appears valid locally, false otherwise.
+   */
+  isTokenValidLocally = async (): Promise<boolean> => {
+    const token = await this.getStoredToken("access_token");
+    if (!token) return false;
+
+    const payload = this.parseJwt(token);
+    if (!payload || typeof payload !== "object") return false;
+
+    const { exp } = payload;
+    const expiration = this.parseExp(exp);
+    if (!expiration) return false;
+    return expiration > new Date();
+  };
 
   /**
    * Handle and normalize errors

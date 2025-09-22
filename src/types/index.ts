@@ -20,6 +20,20 @@ export interface BlitzWareConfig {
   responseType?: "code" | "token";
 }
 
+export interface TokenIntrospectionResponse {
+  active: boolean;
+  client_id?: string;
+  username?: string;
+  scope?: string;
+  sub?: string;
+  aud?: string;
+  iss?: string;
+  exp?: number;
+  iat?: number;
+  token_type?: string;
+  [key: string]: any;
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -55,9 +69,10 @@ export interface BlitzWareAuthContextValue extends AuthState {
   getAccessToken: () => Promise<string | null>;
   hasRole: (role: string) => boolean;
   refresh: () => Promise<void>;
+  validateSession: () => Promise<boolean>;
 }
 
-import { ReactNode } from 'react';
+import { ReactNode } from "react";
 
 export interface BlitzWareProviderProps {
   children: ReactNode;
@@ -71,18 +86,19 @@ export class BlitzWareError extends Error {
     public statusCode?: number
   ) {
     super(message);
-    this.name = 'BlitzWareError';
+    this.name = "BlitzWareError";
   }
 }
 
 export enum AuthErrorCode {
-  CONFIGURATION_ERROR = 'configuration_error',
-  NETWORK_ERROR = 'network_error',
-  AUTHENTICATION_FAILED = 'authentication_failed',
-  TOKEN_EXPIRED = 'token_expired',
-  REFRESH_FAILED = 'refresh_failed',
-  LOGOUT_FAILED = 'logout_failed',
-  USER_INFO_FAILED = 'user_info_failed',
-  STORAGE_ERROR = 'storage_error',
-  UNKNOWN_ERROR = 'unknown_error'
+  CONFIGURATION_ERROR = "configuration_error",
+  NETWORK_ERROR = "network_error",
+  AUTHENTICATION_FAILED = "authentication_failed",
+  TOKEN_EXPIRED = "token_expired",
+  REFRESH_FAILED = "refresh_failed",
+  LOGOUT_FAILED = "logout_failed",
+  USER_INFO_FAILED = "user_info_failed",
+  STORAGE_ERROR = "storage_error",
+  INTROSPECTION_FAILED = "introspection_failed",
+  UNKNOWN_ERROR = "unknown_error",
 }

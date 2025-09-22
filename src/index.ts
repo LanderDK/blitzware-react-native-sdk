@@ -12,7 +12,8 @@ export {
   useAccessToken,
   useLogin,
   useLogout,
-  useRefresh
+  useRefresh,
+  useValidateSession
 } from './hooks';
 
 // Utility exports

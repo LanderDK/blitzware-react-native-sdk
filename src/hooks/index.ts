@@ -72,3 +72,12 @@ export const useRefresh = () => {
   const { refresh } = useBlitzWareAuth();
   return refresh;
 };
+
+/**
+ * Hook to validate current session
+ * Use this for protected routes/components to ensure user has valid session
+ */
+export const useValidateSession = () => {
+  const { validateSession } = useBlitzWareAuth();
+  return validateSession;
+};
