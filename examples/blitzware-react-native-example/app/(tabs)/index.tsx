@@ -9,11 +9,8 @@ export default function HomeScreen() {
     useBlitzWareAuth();
 
   const handleLogin = async () => {
-    console.log("Login button pressed");
     try {
-      console.log("Calling login method...");
       await login();
-      console.log("Login successful");
     } catch (error) {
       console.error("Login error:", error);
     }
@@ -22,7 +19,6 @@ export default function HomeScreen() {
   const handleLogout = async () => {
     try {
       await logout();
-      console.log("Logout successful");
     } catch (error) {
       console.error("Logout error:", error);
     }

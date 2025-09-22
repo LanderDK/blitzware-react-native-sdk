@@ -6,30 +6,30 @@
             }),.
  * Uses expo-auth-session for cross-platform compatibility (iOS, Android, Web)
  */
-import * as AuthSession from 'expo-auth-session';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
+import * as AuthSession from "expo-auth-session";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import {
   BlitzWareConfig,
   BlitzWareUser,
   TokenSet,
   AuthorizeResult,
   BlitzWareError,
-  AuthErrorCode
-} from './types';
+  AuthErrorCode,
+} from "./types";
 
 const STORAGE_KEYS = {
-  ACCESS_TOKEN: '@blitzware/access_token',
-  REFRESH_TOKEN: '@blitzware/refresh_token',
+  ACCESS_TOKEN: "@blitzware/access_token",
+  REFRESH_TOKEN: "@blitzware/refresh_token",
   // Note: ID tokens not supported by BlitzWare OAuth 2.0 service
   // ID_TOKEN: '@blitzware/id_token',
-  USER: '@blitzware/user',
-  TOKEN_EXPIRY: '@blitzware/token_expiry'
+  USER: "@blitzware/user",
+  TOKEN_EXPIRY: "@blitzware/token_expiry",
 } as const;
 
 const SECURE_STORE_KEYS = {
-  ACCESS_TOKEN: 'blitzware_access_token',
-  REFRESH_TOKEN: 'blitzware_refresh_token'
+  ACCESS_TOKEN: "blitzware_access_token",
+  REFRESH_TOKEN: "blitzware_refresh_token",
 } as const;
 
 export class BlitzWareAuthClient {
@@ -47,13 +47,16 @@ export class BlitzWareAuthClient {
     if (!this.discovery) {
       try {
         // Try to fetch discovery document
-        this.discovery = await AuthSession.fetchDiscoveryAsync('https://auth.blitzware.xyz/api/auth');
+        this.discovery = await AuthSession.fetchDiscoveryAsync(
+          "https://auth.blitzware.xyz/api/auth"
+        );
       } catch (error) {
         // Fallback to manual configuration if discovery fails
         this.discovery = {
-          authorizationEndpoint: 'https://auth.blitzware.xyz/api/auth/authorize',
-          tokenEndpoint: 'https://auth.blitzware.xyz/api/auth/token',
-          revocationEndpoint: 'https://auth.blitzware.xyz/api/auth/revoke',
+          authorizationEndpoint:
+            "https://auth.blitzware.xyz/api/auth/authorize",
+          tokenEndpoint: "https://auth.blitzware.xyz/api/auth/token",
+          revocationEndpoint: "https://auth.blitzware.xyz/api/auth/revoke",
         };
       }
     }
@@ -66,7 +69,7 @@ export class BlitzWareAuthClient {
   async login(): Promise<BlitzWareUser> {
     try {
       const discovery = await this.getDiscovery();
-      
+
       // Create authorization request
       const request = new AuthSession.AuthRequest({
         clientId: this.config.clientId,
@@ -79,8 +82,8 @@ export class BlitzWareAuthClient {
       // Prompt for authorization
       const result = await request.promptAsync(discovery);
 
-      if (result.type !== 'success') {
-        throw new Error('Authorization was cancelled or failed');
+      if (result.type !== "success") {
+        throw new Error("Authorization was cancelled or failed");
       }
 
       // Exchange code for tokens
@@ -89,7 +92,9 @@ export class BlitzWareAuthClient {
           clientId: this.config.clientId,
           code: result.params.code,
           redirectUri: this.config.redirectUri,
-          extraParams: request.codeVerifier ? { code_verifier: request.codeVerifier } : {},
+          extraParams: request.codeVerifier
+            ? { code_verifier: request.codeVerifier }
+            : {},
         },
         discovery
       );
@@ -98,9 +103,9 @@ export class BlitzWareAuthClient {
       await this.storeTokens({
         accessToken: tokenResult.accessToken,
         refreshToken: tokenResult.refreshToken || undefined,
-        expiresAt: tokenResult.expiresIn 
-          ? Date.now() + (tokenResult.expiresIn * 1000)
-          : undefined
+        expiresAt: tokenResult.expiresIn
+          ? Date.now() + tokenResult.expiresIn * 1000
+          : undefined,
       });
 
       // Get user information
@@ -119,26 +124,30 @@ export class BlitzWareAuthClient {
   async logout(): Promise<void> {
     try {
       const accessToken = await this.getStoredAccessToken();
-      
+
       if (accessToken) {
         // Call logout endpoint directly like React SDK
         try {
-          const response = await fetch('https://auth.blitzware.xyz/api/auth/logout', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              client_id: this.config.clientId
-            })
-          });
-          
+          const response = await fetch(
+            "https://auth.blitzware.xyz/api/auth/logout",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                client_id: this.config.clientId,
+              }),
+              credentials: "include", // Include cookies for session-based logout
+            }
+          );
+
           if (!response.ok) {
-            console.warn('Logout request failed:', response.status);
+            console.warn("Logout request failed:", response.status);
           }
         } catch (logoutError) {
           // Continue with local logout even if logout request fails
-          console.warn('Logout request failed:', logoutError);
+          console.warn("Logout request failed:", logoutError);
         }
       }
 
@@ -178,9 +187,12 @@ export class BlitzWareAuthClient {
   async refreshAccessToken(): Promise<string> {
     try {
       const refreshToken = await this.getStoredRefreshToken();
-      
+
       if (!refreshToken) {
-        throw new BlitzWareError('No refresh token available', AuthErrorCode.REFRESH_FAILED);
+        throw new BlitzWareError(
+          "No refresh token available",
+          AuthErrorCode.REFRESH_FAILED
+        );
       }
 
       const discovery = await this.getDiscovery();
@@ -198,9 +210,9 @@ export class BlitzWareAuthClient {
       await this.storeTokens({
         accessToken: tokenResult.accessToken,
         refreshToken: tokenResult.refreshToken || refreshToken,
-        expiresAt: tokenResult.expiresIn 
-          ? Date.now() + (tokenResult.expiresIn * 1000)
-          : undefined
+        expiresAt: tokenResult.expiresIn
+          ? Date.now() + tokenResult.expiresIn * 1000
+          : undefined,
       });
 
       return tokenResult.accessToken;
@@ -219,7 +231,7 @@ export class BlitzWareAuthClient {
       const userJson = await AsyncStorage.getItem(STORAGE_KEYS.USER);
       return userJson ? JSON.parse(userJson) : null;
     } catch (error) {
-      console.warn('Failed to get user from storage:', error);
+      console.warn("Failed to get user from storage:", error);
       return null;
     }
   }
@@ -246,8 +258,8 @@ export class BlitzWareAuthClient {
         return false;
       }
 
-      return user.roles.some(role => 
-        typeof role === 'string' 
+      return user.roles.some((role) =>
+        typeof role === "string"
           ? role.toLowerCase() === roleName.toLowerCase()
           : role.name?.toLowerCase() === roleName.toLowerCase()
       );
@@ -261,13 +273,17 @@ export class BlitzWareAuthClient {
    */
   private async fetchUserInfo(accessToken: string): Promise<BlitzWareUser> {
     try {
-      const response = await fetch('https://auth.blitzware.xyz/api/auth/userinfo', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+      const response = await fetch(
+        "https://auth.blitzware.xyz/api/auth/userinfo",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
         }
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to fetch user info: ${response.status}`);
@@ -306,7 +322,10 @@ export class BlitzWareAuthClient {
       // }
 
       if (tokens.expiresAt) {
-        await AsyncStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, tokens.expiresAt.toString());
+        await AsyncStorage.setItem(
+          STORAGE_KEYS.TOKEN_EXPIRY,
+          tokens.expiresAt.toString()
+        );
       }
     } catch (error) {
       throw this.handleError(error, AuthErrorCode.STORAGE_ERROR);
@@ -320,7 +339,7 @@ export class BlitzWareAuthClient {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
     } catch (error) {
-      console.warn('Failed to store user:', error);
+      console.warn("Failed to store user:", error);
     }
   }
 
@@ -360,10 +379,10 @@ export class BlitzWareAuthClient {
         // Note: ID tokens not supported by BlitzWare OAuth 2.0 service
         // STORAGE_KEYS.ID_TOKEN,
         STORAGE_KEYS.USER,
-        STORAGE_KEYS.TOKEN_EXPIRY
+        STORAGE_KEYS.TOKEN_EXPIRY,
       ]);
     } catch (error) {
-      console.warn('Failed to clear storage:', error);
+      console.warn("Failed to clear storage:", error);
     }
   }
 
@@ -375,7 +394,8 @@ export class BlitzWareAuthClient {
       return error;
     }
 
-    const message = error?.message || error?.toString() || 'Unknown error occurred';
+    const message =
+      error?.message || error?.toString() || "Unknown error occurred";
     return new BlitzWareError(message, code);
   }
 }
