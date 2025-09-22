@@ -1,32 +1,13 @@
 import React from "react";
-import { StyleSheet, Pressable } from "react-native";
+import { StyleSheet } from "react-native";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useBlitzWareAuth } from "blitzware-react-native-sdk";
 
-export default function HomeScreen() {
-  const { login, logout, isAuthenticated, user, isLoading, error } =
+export default function AdminScreen() {
+  const { isAuthenticated, user, isLoading, error, hasRole } =
     useBlitzWareAuth();
-
-  const handleLogin = async () => {
-    console.log("Login button pressed");
-    try {
-      console.log("Calling login method...");
-      await login();
-      console.log("Login successful");
-    } catch (error) {
-      console.error("Login error:", error);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      console.log("Logout successful");
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-  };
+  const isAdmin = hasRole("admin");
 
   return (
     <ThemedView style={styles.container}>
@@ -56,28 +37,11 @@ export default function HomeScreen() {
             <ThemedText>ID: {user.id}</ThemedText>
             <ThemedText>Email: {user.email || "N/A"}</ThemedText>
             <ThemedText>Name: {user.username || "N/A"}</ThemedText>
-          </ThemedView>
-        )}
-      </ThemedView>
-      <ThemedView style={styles.buttonContainer}>
-        {!isAuthenticated ? (
-          <Pressable
-            style={styles.button}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            <ThemedText style={styles.buttonText}>
-              Login with BlitzWare
+            <ThemedText>
+              Roles: {(user.roles || []).join(", ") || "N/A"}
             </ThemedText>
-          </Pressable>
-        ) : (
-          <Pressable
-            style={styles.button}
-            onPress={handleLogout}
-            disabled={isLoading}
-          >
-            <ThemedText style={styles.buttonText}>Logout</ThemedText>
-          </Pressable>
+            <ThemedText>Is Admin: {isAdmin ? "Yes" : "No"}</ThemedText>
+          </ThemedView>
         )}
       </ThemedView>
     </ThemedView>
@@ -111,21 +75,5 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
     backgroundColor: "rgba(255,0,0,0.1)",
-  },
-  buttonContainer: {
-    alignItems: "center",
-  },
-  button: {
-    backgroundColor: "#007AFF",
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 8,
-    minWidth: 200,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
   },
 });

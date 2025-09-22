@@ -14,7 +14,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   const blitzWareConfig = {
-    clientId: 'test-client-id', // Test client ID  
+    clientId: '2f465572-9a90-4bd1-b4ec-3b03b33fbb66', // Test client ID  
     redirectUri: 'blitzwarereactnativeexample://oauth', // Using the app scheme from app.json
   };
 
