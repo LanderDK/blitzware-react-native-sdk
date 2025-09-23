@@ -44,10 +44,10 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^1.21.0",
-    "@react-native-cookies/cookies": "^6.2.1",
     "axios": "^1.12.2",
     "buffer": "^6.0.3",
     "expo-auth-session": "^6.0.0",
+    "expo-cookies": "^1.0.2",
     "expo-crypto": "^15.0.0",
     "expo-secure-store": "^14.0.0"
   },

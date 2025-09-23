@@ -19,50 +19,74 @@ import {
 } from "./types";
 import axios from "axios";
 import { Buffer } from "buffer";
-import CookieManager from "@react-native-cookies/cookies";
+import * as Cookies from "expo-cookies";
 
 const BASE_URL = "https://auth.blitzware.xyz/api/auth";
 
-// Configure axios instance with credentials for session support
+/**
+ * Axios instance with manual cookie handling (since RN has no cookie jar).
+ */
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  withCredentials: true, // This still won’t work on RN alone, so we add CookieManager
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Attach cookies from CookieManager to requests
-apiClient.interceptors.request.use(async (config) => {
-  const cookies = await CookieManager.get(BASE_URL);
-  if (cookies) {
-    const cookieHeader = Object.entries(cookies)
-      .map(([name, cookie]) => `${name}=${cookie.value}`)
-      .join("; ");
-    if (cookieHeader) {
-      config.headers.Cookie = cookieHeader;
+function parseSetCookie(cookieStr: string): Cookies.Cookie {
+  const parts = cookieStr.split(";").map((p) => p.trim());
+  const [name, value] = parts[0].split("=");
+  const cookie: Cookies.Cookie = { name, value };
+
+  parts.slice(1).forEach((part) => {
+    const [k, v] = part.split("=");
+    switch (k.toLowerCase()) {
+      case "domain":
+        cookie.domain = v;
+        break;
+      case "path":
+        cookie.path = v;
+        break;
+      case "expires":
+        cookie.expires = v;
+        break;
+      case "secure":
+        cookie.secure = true;
+        break;
+      case "httponly":
+        cookie.httpOnly = true;
+        break;
     }
+  });
+
+  return cookie;
+}
+
+// Attach cookies from expo-cookies before each request
+apiClient.interceptors.request.use(async (config) => {
+  const cookies = await Cookies.CookieManager.get("https://auth.blitzware.xyz");
+  if (cookies && Object.keys(cookies).length > 0) {
+    config.headers["Cookie"] = Object.entries(cookies)
+      .map(([k, v]) => `${k}=${v.value}`)
+      .join("; ");
   }
   return config;
 });
 
-// Store cookies from responses
+// Save cookies returned from server
 apiClient.interceptors.response.use(async (response) => {
-  if (response.headers["set-cookie"]) {
-    const setCookieHeader = Array.isArray(response.headers["set-cookie"])
-      ? response.headers["set-cookie"][0]
-      : response.headers["set-cookie"];
-
-    // Extract "name=value" (CookieManager wants just the value part)
-    const [rawName, rawValue] = setCookieHeader.split(";")[0].split("=");
-
-    await CookieManager.set(BASE_URL, {
-      name: rawName,
-      value: rawValue,
-      domain: "auth.blitzware.xyz",
-      path: "/",
-      version: "1",
-    });
+  const setCookie = response.headers["set-cookie"];
+  if (setCookie) {
+    const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+    await Promise.all(
+      cookieArray.map((cookieStr) =>
+        Cookies.CookieManager.set(
+          "https://auth.blitzware.xyz",
+          parseSetCookie(cookieStr)
+        )
+      )
+    );
   }
   return response;
 });
