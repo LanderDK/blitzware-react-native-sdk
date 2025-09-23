@@ -19,16 +19,52 @@ import {
 } from "./types";
 import axios from "axios";
 import { Buffer } from "buffer";
+import CookieManager from "@react-native-cookies/cookies";
 
 const BASE_URL = "https://auth.blitzware.xyz/api/auth";
 
 // Configure axios instance with credentials for session support
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  withCredentials: true, // Include session cookies in all requests
+  withCredentials: true, // This still won’t work on RN alone, so we add CookieManager
   headers: {
     "Content-Type": "application/json",
   },
+});
+
+// Attach cookies from CookieManager to requests
+apiClient.interceptors.request.use(async (config) => {
+  const cookies = await CookieManager.get(BASE_URL);
+  if (cookies) {
+    const cookieHeader = Object.entries(cookies)
+      .map(([name, cookie]) => `${name}=${cookie.value}`)
+      .join("; ");
+    if (cookieHeader) {
+      config.headers.Cookie = cookieHeader;
+    }
+  }
+  return config;
+});
+
+// Store cookies from responses
+apiClient.interceptors.response.use(async (response) => {
+  if (response.headers["set-cookie"]) {
+    const setCookieHeader = Array.isArray(response.headers["set-cookie"])
+      ? response.headers["set-cookie"][0]
+      : response.headers["set-cookie"];
+
+    // Extract "name=value" (CookieManager wants just the value part)
+    const [rawName, rawValue] = setCookieHeader.split(";")[0].split("=");
+
+    await CookieManager.set(BASE_URL, {
+      name: rawName,
+      value: rawValue,
+      domain: "auth.blitzware.xyz",
+      path: "/",
+      version: "1",
+    });
+  }
+  return response;
 });
 
 const STORAGE_KEYS = {
@@ -167,7 +203,7 @@ export class BlitzWareAuthClient {
     try {
       // First check if we have a token locally that appears valid
       const isLocallyValid = await this.isTokenValidLocally();
-      
+
       if (!isLocallyValid) {
         // Token is expired or missing locally, try to refresh
         try {
@@ -180,7 +216,7 @@ export class BlitzWareAuthClient {
 
       // Now validate with server to be sure
       const isServerValid = await this.isAuthenticated();
-      
+
       if (!isServerValid) {
         // Server says token is invalid, try to refresh
         try {
@@ -282,7 +318,7 @@ export class BlitzWareAuthClient {
     try {
       // First ensure we have a valid token
       const accessToken = await this.getAccessToken();
-      
+
       if (!accessToken) {
         return null;
       }
@@ -299,7 +335,7 @@ export class BlitzWareAuthClient {
       // No stored user or need fresh data, fetch from server
       const user = await this.fetchUserInfo();
       await this.storeUser(user);
-      
+
       return user;
     } catch (error) {
       console.warn("Failed to get user:", error);
