@@ -19,77 +19,33 @@ import {
 } from "./types";
 import axios from "axios";
 import { Buffer } from "buffer";
-import * as Cookies from "expo-cookies";
 
 const BASE_URL = "https://auth.blitzware.xyz/api/auth";
 
-/**
- * Axios instance with manual cookie handling (since RN has no cookie jar).
- */
+// Configure axios instance with credentials for session support
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-function parseSetCookie(cookieStr: string): Cookies.Cookie {
-  const parts = cookieStr.split(";").map((p) => p.trim());
-  const [name, value] = parts[0].split("=");
-  const cookie: Cookies.Cookie = { name, value };
-
-  parts.slice(1).forEach((part) => {
-    const [k, v] = part.split("=");
-    switch (k.toLowerCase()) {
-      case "domain":
-        cookie.domain = v;
-        break;
-      case "path":
-        cookie.path = v;
-        break;
-      case "expires":
-        cookie.expires = v;
-        break;
-      case "secure":
-        cookie.secure = true;
-        break;
-      case "httponly":
-        cookie.httpOnly = true;
-        break;
-    }
-  });
-
-  return cookie;
-}
-
-// Attach cookies from expo-cookies before each request
-apiClient.interceptors.request.use(async (config) => {
-  const cookies = await Cookies.CookieManager.get("https://auth.blitzware.xyz");
-  if (cookies && Object.keys(cookies).length > 0) {
-    config.headers["Cookie"] = Object.entries(cookies)
-      .map(([k, v]) => `${k}=${v.value}`)
-      .join("; ");
-  }
+apiClient.interceptors.request.use((config) => {
+  config.withCredentials = true; // Include session cookies in all requests
   return config;
 });
 
-// Save cookies returned from server
-apiClient.interceptors.response.use(async (response) => {
-  const setCookie = response.headers["set-cookie"];
-  if (setCookie) {
-    const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
-    await Promise.all(
-      cookieArray.map((cookieStr) =>
-        Cookies.CookieManager.set(
-          "https://auth.blitzware.xyz",
-          parseSetCookie(cookieStr)
-        )
-      )
-    );
+apiClient.interceptors.response.use(
+  (response) => {
+    // Show all cookies for debugging
+    console.log("Cookies:", response.headers["set-cookie"]);
+    return response;
+  },
+  (error) => {
+    // Handle errors
+    return Promise.reject(error);
   }
-  return response;
-});
+);
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: "@blitzware/access_token",
@@ -227,7 +183,7 @@ export class BlitzWareAuthClient {
     try {
       // First check if we have a token locally that appears valid
       const isLocallyValid = await this.isTokenValidLocally();
-
+      
       if (!isLocallyValid) {
         // Token is expired or missing locally, try to refresh
         try {
@@ -240,7 +196,7 @@ export class BlitzWareAuthClient {
 
       // Now validate with server to be sure
       const isServerValid = await this.isAuthenticated();
-
+      
       if (!isServerValid) {
         // Server says token is invalid, try to refresh
         try {
@@ -342,7 +298,7 @@ export class BlitzWareAuthClient {
     try {
       // First ensure we have a valid token
       const accessToken = await this.getAccessToken();
-
+      
       if (!accessToken) {
         return null;
       }
@@ -359,7 +315,7 @@ export class BlitzWareAuthClient {
       // No stored user or need fresh data, fetch from server
       const user = await this.fetchUserInfo();
       await this.storeUser(user);
-
+      
       return user;
     } catch (error) {
       console.warn("Failed to get user:", error);
