@@ -9,7 +9,6 @@
 import * as AuthSession from "expo-auth-session";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import CookieManager from '@react-native-cookies/cookies';
 import {
   BlitzWareConfig,
   BlitzWareUser,
@@ -23,7 +22,72 @@ import { Buffer } from "buffer";
 
 const BASE_URL = "https://auth.blitzware.xyz/api/auth";
 
-// Create axios instance with cookie support for React Native
+// Custom cookie management for Expo compatibility
+class ExpoCookieManager {
+  private static COOKIE_STORAGE_KEY = '@blitzware_cookies';
+
+  static async setCookie(domain: string, name: string, value: string): Promise<void> {
+    try {
+      const existingCookies = await this.getCookies(domain);
+      existingCookies[name] = { value, domain, expires: Date.now() + 7 * 24 * 60 * 60 * 1000 }; // 7 days
+      
+      await AsyncStorage.setItem(`${this.COOKIE_STORAGE_KEY}_${domain}`, JSON.stringify(existingCookies));
+      console.log('🍪 Stored cookie:', name, '=', value, 'for', domain);
+    } catch (error) {
+      console.warn('Failed to store cookie:', error);
+    }
+  }
+
+  static async getCookies(domain: string): Promise<Record<string, any>> {
+    try {
+      const cookies = await AsyncStorage.getItem(`${this.COOKIE_STORAGE_KEY}_${domain}`);
+      return cookies ? JSON.parse(cookies) : {};
+    } catch (error) {
+      console.warn('Failed to get cookies:', error);
+      return {};
+    }
+  }
+
+  static async clearCookies(domain: string): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(`${this.COOKIE_STORAGE_KEY}_${domain}`);
+      console.log('🗑️ Cleared cookies for domain:', domain);
+    } catch (error) {
+      console.warn('Failed to clear cookies:', error);
+    }
+  }
+
+  static async clearAllCookies(): Promise<void> {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const cookieKeys = keys.filter(key => key.startsWith(this.COOKIE_STORAGE_KEY));
+      await AsyncStorage.multiRemove(cookieKeys);
+      console.log('🗑️ Cleared all BlitzWare cookies');
+    } catch (error) {
+      console.warn('Failed to clear all cookies:', error);
+    }
+  }
+
+  static parseCookiesFromSetCookie(setCookieHeader: string): Array<{name: string, value: string}> {
+    const cookies: Array<{name: string, value: string}> = [];
+    
+    // Split by comma, but be careful of expires dates which also contain commas
+    const cookieParts = setCookieHeader.split(/,(?=\s*[^=]+\s*=)/);
+    
+    for (const cookiePart of cookieParts) {
+      const [nameValue] = cookiePart.trim().split(';');
+      if (nameValue && nameValue.includes('=')) {
+        const [name, ...valueParts] = nameValue.split('=');
+        const value = valueParts.join('='); // Handle values with = in them
+        cookies.push({ name: name.trim(), value: value.trim() });
+      }
+    }
+    
+    return cookies;
+  }
+}
+
+// Create axios instance with custom cookie support for Expo
 const createApiClient = () => {
   const client = axios.create({
     baseURL: BASE_URL,
@@ -36,7 +100,7 @@ const createApiClient = () => {
   client.interceptors.request.use(async (config) => {
     try {
       // Get cookies for the domain
-      const cookies = await CookieManager.get(BASE_URL);
+      const cookies = await ExpoCookieManager.getCookies(BASE_URL);
       
       if (cookies && Object.keys(cookies).length > 0) {
         // Convert cookies object to cookie string
@@ -64,7 +128,10 @@ const createApiClient = () => {
         if (setCookieHeader) {
           console.log('📥 Received cookies:', setCookieHeader);
           for (const cookieString of setCookieHeader) {
-            await CookieManager.setFromResponse(BASE_URL, cookieString);
+            const cookies = ExpoCookieManager.parseCookiesFromSetCookie(cookieString);
+            for (const cookie of cookies) {
+              await ExpoCookieManager.setCookie(BASE_URL, cookie.name, cookie.value);
+            }
           }
         }
       } catch (error) {
@@ -245,7 +312,7 @@ export class BlitzWareAuthClient {
 
       // Clear cookies
       try {
-        await CookieManager.clearAll();
+        await ExpoCookieManager.clearAllCookies();
       } catch (error) {
         console.warn("Failed to clear cookies:", error);
       }

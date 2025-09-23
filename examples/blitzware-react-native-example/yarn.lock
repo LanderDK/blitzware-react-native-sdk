@@ -1702,6 +1702,13 @@
   dependencies:
     merge-options "^3.0.4"
 
+"@react-native-cookies/cookies@^6.2.1":
+  version "6.2.1"
+  resolved "https://registry.yarnpkg.com/@react-native-cookies/cookies/-/cookies-6.2.1.tgz#54d50b9496400bbdc19e43c155f70f8f918999e3"
+  integrity sha512-D17wCA0DXJkGJIxkL74Qs9sZ3sA+c+kCoGmXVknW7bVw/W+Vv1m/7mWTNi9DLBZSRddhzYw8SU0aJapIaM/g5w==
+  dependencies:
+    invariant "^2.2.4"
+
 "@react-native/assets-registry@0.81.4":
   version "0.81.4"
   resolved "https://registry.yarnpkg.com/@react-native/assets-registry/-/assets-registry-0.81.4.tgz#bfa477c8e9d54d6ef4ab6e81b886d5be13c09fbd"
@@ -2683,12 +2690,13 @@ big-integer@1.6.x:
   resolved "https://registry.yarnpkg.com/big-integer/-/big-integer-1.6.52.tgz#60a887f3047614a8e1bffe5d7173490a97dc8c85"
   integrity sha512-QxD8cf2eVqJOOz63z6JIN9BzvVs/dlySa5HGSBH5xtR8dPteIRQnBxxKqkNTiT6jbDTF6jAfrd4oMcND9RGbQg==
 
-blitzware-react-native-sdk@^1.0.4:
-  version "1.0.4"
-  resolved "https://registry.yarnpkg.com/blitzware-react-native-sdk/-/blitzware-react-native-sdk-1.0.4.tgz#c9aff45da895536e2631a009c11aec91680af149"
-  integrity sha512-11wm0sGDpZFMBMLtWuHLrgOABsCy9S37EahRcqvTIKBv8PhucnN/9ai2a9uf+lwvGZX4QfQ0HntR4EFQgwIthw==
+blitzware-react-native-sdk@^1.0.5:
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/blitzware-react-native-sdk/-/blitzware-react-native-sdk-1.0.5.tgz#69a9dd3e063149a4779536f8661d79a69cd6c488"
+  integrity sha512-sFYDYar5bNqrRO6GTfRiAxxeH/f881eFbp4TfK09ZOiysQM/ZRUX0RfzsD3mL42V4PpHnbYumbZi58B22nUXWQ==
   dependencies:
     "@react-native-async-storage/async-storage" "^1.21.0"
+    "@react-native-cookies/cookies" "^6.2.1"
     axios "^1.12.2"
     buffer "^6.0.3"
     expo-auth-session "^6.0.0"
