@@ -2683,10 +2683,10 @@ big-integer@1.6.x:
   resolved "https://registry.yarnpkg.com/big-integer/-/big-integer-1.6.52.tgz#60a887f3047614a8e1bffe5d7173490a97dc8c85"
   integrity sha512-QxD8cf2eVqJOOz63z6JIN9BzvVs/dlySa5HGSBH5xtR8dPteIRQnBxxKqkNTiT6jbDTF6jAfrd4oMcND9RGbQg==
 
-blitzware-react-native-sdk@^1.0.6:
-  version "1.0.6"
-  resolved "https://registry.yarnpkg.com/blitzware-react-native-sdk/-/blitzware-react-native-sdk-1.0.6.tgz#795cbc82d50e2913b8bfca9df5ed268f6b13893c"
-  integrity sha512-5nggW/6qj1H5ah4zToxYarYUT1l/4+GrZhCtYTGDY0SETF/zaRowOIvTC7764vwHQa6+Vl9GN3wDiSfrqeVaeA==
+blitzware-react-native-sdk@^1.0.7:
+  version "1.0.7"
+  resolved "https://registry.yarnpkg.com/blitzware-react-native-sdk/-/blitzware-react-native-sdk-1.0.7.tgz#14c39760c0ee317b9ca35afadf5ea954479d6e00"
+  integrity sha512-goSZs4KlCUjzEuky6lKkHhdqlNHVLltjtozCBPsE6cL0VoSOFd+RCoHrp72txPBkm3HNzP8tW9v4+C2lPBcaAg==
   dependencies:
     "@react-native-async-storage/async-storage" "^1.21.0"
     axios "^1.12.2"

@@ -21,142 +21,15 @@ import axios from "axios";
 import { Buffer } from "buffer";
 
 const BASE_URL = "https://auth.blitzware.xyz/api/auth";
-const COOKIE_DOMAIN = "auth.blitzware.xyz"; // Extract just the hostname for cookie storage
 
-// Custom cookie management for Expo compatibility
-class ExpoCookieManager {
-  private static COOKIE_STORAGE_KEY = '@blitzware_cookies';
-
-  static async setCookie(domain: string, name: string, value: string): Promise<void> {
-    try {
-      const existingCookies = await this.getCookies(domain);
-      existingCookies[name] = { value, domain, expires: Date.now() + 7 * 24 * 60 * 60 * 1000 }; // 7 days
-      
-      await AsyncStorage.setItem(`${this.COOKIE_STORAGE_KEY}_${domain}`, JSON.stringify(existingCookies));
-      console.log('🍪 Stored cookie:', name, '=', value, 'for domain:', domain);
-      console.log('🍪 All cookies for domain:', existingCookies);
-    } catch (error) {
-      console.warn('Failed to store cookie:', error);
-    }
-  }
-
-  static async getCookies(domain: string): Promise<Record<string, any>> {
-    try {
-      const cookies = await AsyncStorage.getItem(`${this.COOKIE_STORAGE_KEY}_${domain}`);
-      return cookies ? JSON.parse(cookies) : {};
-    } catch (error) {
-      console.warn('Failed to get cookies:', error);
-      return {};
-    }
-  }
-
-  static async clearCookies(domain: string): Promise<void> {
-    try {
-      await AsyncStorage.removeItem(`${this.COOKIE_STORAGE_KEY}_${domain}`);
-      console.log('🗑️ Cleared cookies for domain:', domain);
-    } catch (error) {
-      console.warn('Failed to clear cookies:', error);
-    }
-  }
-
-  static async clearAllCookies(): Promise<void> {
-    try {
-      const keys = await AsyncStorage.getAllKeys();
-      const cookieKeys = keys.filter(key => key.startsWith(this.COOKIE_STORAGE_KEY));
-      await AsyncStorage.multiRemove(cookieKeys);
-      console.log('🗑️ Cleared all BlitzWare cookies');
-    } catch (error) {
-      console.warn('Failed to clear all cookies:', error);
-    }
-  }
-
-  static parseCookiesFromSetCookie(setCookieHeader: string): Array<{name: string, value: string}> {
-    const cookies: Array<{name: string, value: string}> = [];
-    
-    // Split by comma, but be careful of expires dates which also contain commas
-    const cookieParts = setCookieHeader.split(/,(?=\s*[^=]+\s*=)/);
-    
-    for (const cookiePart of cookieParts) {
-      const [nameValue] = cookiePart.trim().split(';');
-      if (nameValue && nameValue.includes('=')) {
-        const [name, ...valueParts] = nameValue.split('=');
-        const value = valueParts.join('='); // Handle values with = in them
-        cookies.push({ name: name.trim(), value: value.trim() });
-      }
-    }
-    
-    return cookies;
-  }
-}
-
-// Create axios instance with custom cookie support for Expo
-const createApiClient = () => {
-  const client = axios.create({
-    baseURL: BASE_URL,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-  // Request interceptor to add cookies
-  client.interceptors.request.use(async (config) => {
-    try {
-      // Get cookies for the domain
-      const cookies = await ExpoCookieManager.getCookies(COOKIE_DOMAIN);
-      
-      console.log('📤 Request interceptor - checking cookies for:', COOKIE_DOMAIN);
-      console.log('📤 Found cookies:', cookies);
-      
-      if (cookies && Object.keys(cookies).length > 0) {
-        // Convert cookies object to cookie string
-        const cookieString = Object.entries(cookies)
-          .map(([name, cookie]) => `${name}=${cookie.value}`)
-          .join('; ');
-        
-        config.headers.Cookie = cookieString;
-        console.log('📤 Sending cookies:', cookieString);
-      } else {
-        console.log('📤 No cookies found to send');
-      }
-    } catch (error) {
-      console.warn('Failed to get cookies:', error);
-    }
-    
-    return config;
-  });
-
-  // Response interceptor to save cookies
-  client.interceptors.response.use(
-    async (response) => {
-      try {
-        // Extract and save cookies from response headers
-        const setCookieHeader = response.headers['set-cookie'];
-        
-        if (setCookieHeader) {
-          console.log('📥 Received cookies:', setCookieHeader);
-          for (const cookieString of setCookieHeader) {
-            const cookies = ExpoCookieManager.parseCookiesFromSetCookie(cookieString);
-            console.log('📥 Parsed cookies from header:', cookies);
-            for (const cookie of cookies) {
-              await ExpoCookieManager.setCookie(COOKIE_DOMAIN, cookie.name, cookie.value);
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('Failed to save cookies:', error);
-      }
-      
-      return response;
-    },
-    (error) => {
-      return Promise.reject(error);
-    }
-  );
-
-  return client;
-};
-
-const apiClient = createApiClient();
+// Configure axios instance with credentials for session support
+const apiClient = axios.create({
+  baseURL: BASE_URL,
+  withCredentials: true, // Include session cookies in all requests
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: "@blitzware/access_token",
@@ -247,52 +120,13 @@ export class BlitzWareAuthClient {
           : undefined,
       });
 
-      // Get user information and establish session
+      // Get user information
       const user = await this.fetchUserInfo();
       await this.storeUser(user);
-
-      // Establish session by making an authenticated request
-      // This will set the session cookies on the backend
-      try {
-        await this.establishSession(user);
-      } catch (sessionError) {
-        console.warn("Failed to establish session:", sessionError);
-        // Continue anyway, token-based auth will still work
-      }
 
       return user;
     } catch (error) {
       throw this.handleError(error, AuthErrorCode.AUTHENTICATION_FAILED);
-    }
-  }
-
-  /**
-   * Establish session with the backend by making an authenticated request
-   * This creates session cookies that will be used for subsequent requests
-   */
-  private async establishSession(user: BlitzWareUser): Promise<void> {
-    try {
-      const accessToken = await this.getStoredToken("access_token");
-      if (!accessToken) {
-        throw new Error("No access token available for session establishment");
-      }
-
-      // Make a request to userinfo endpoint to establish session
-      // The backend should create session cookies when this endpoint is accessed
-      await apiClient.get("/userinfo", {
-        params: {
-          access_token: accessToken,
-        },
-        headers: {
-          // Also include in Authorization header as backup
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
-      
-      console.log("Session established successfully");
-    } catch (error) {
-      console.warn("Failed to establish session:", error);
-      throw error;
     }
   }
 
@@ -316,13 +150,6 @@ export class BlitzWareAuthClient {
           // Continue with local logout even if logout request fails
           console.warn("Logout request failed:", logoutError);
         }
-      }
-
-      // Clear cookies
-      try {
-        await ExpoCookieManager.clearCookies(COOKIE_DOMAIN);
-      } catch (error) {
-        console.warn("Failed to clear cookies:", error);
       }
 
       // Clear all stored data
