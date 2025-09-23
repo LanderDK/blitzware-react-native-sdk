@@ -9,6 +9,7 @@
 import * as AuthSession from "expo-auth-session";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import CookieManager from '@react-native-cookies/cookies';
 import {
   BlitzWareConfig,
   BlitzWareUser,
@@ -22,14 +23,65 @@ import { Buffer } from "buffer";
 
 const BASE_URL = "https://auth.blitzware.xyz/api/auth";
 
-// Configure axios instance with credentials for session support
-const apiClient = axios.create({
-  baseURL: BASE_URL,
-  withCredentials: true, // Include session cookies in all requests
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
+// Create axios instance with cookie support for React Native
+const createApiClient = () => {
+  const client = axios.create({
+    baseURL: BASE_URL,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  // Request interceptor to add cookies
+  client.interceptors.request.use(async (config) => {
+    try {
+      // Get cookies for the domain
+      const cookies = await CookieManager.get(BASE_URL);
+      
+      if (cookies && Object.keys(cookies).length > 0) {
+        // Convert cookies object to cookie string
+        const cookieString = Object.entries(cookies)
+          .map(([name, cookie]) => `${name}=${cookie.value}`)
+          .join('; ');
+        
+        config.headers.Cookie = cookieString;
+        console.log('📤 Sending cookies:', cookieString);
+      }
+    } catch (error) {
+      console.warn('Failed to get cookies:', error);
+    }
+    
+    return config;
+  });
+
+  // Response interceptor to save cookies
+  client.interceptors.response.use(
+    async (response) => {
+      try {
+        // Extract and save cookies from response headers
+        const setCookieHeader = response.headers['set-cookie'];
+        
+        if (setCookieHeader) {
+          console.log('📥 Received cookies:', setCookieHeader);
+          for (const cookieString of setCookieHeader) {
+            await CookieManager.setFromResponse(BASE_URL, cookieString);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to save cookies:', error);
+      }
+      
+      return response;
+    },
+    (error) => {
+      return Promise.reject(error);
+    }
+  );
+
+  return client;
+};
+
+const apiClient = createApiClient();
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: "@blitzware/access_token",
@@ -120,13 +172,52 @@ export class BlitzWareAuthClient {
           : undefined,
       });
 
-      // Get user information
+      // Get user information and establish session
       const user = await this.fetchUserInfo();
       await this.storeUser(user);
+
+      // Establish session by making an authenticated request
+      // This will set the session cookies on the backend
+      try {
+        await this.establishSession(user);
+      } catch (sessionError) {
+        console.warn("Failed to establish session:", sessionError);
+        // Continue anyway, token-based auth will still work
+      }
 
       return user;
     } catch (error) {
       throw this.handleError(error, AuthErrorCode.AUTHENTICATION_FAILED);
+    }
+  }
+
+  /**
+   * Establish session with the backend by making an authenticated request
+   * This creates session cookies that will be used for subsequent requests
+   */
+  private async establishSession(user: BlitzWareUser): Promise<void> {
+    try {
+      const accessToken = await this.getStoredToken("access_token");
+      if (!accessToken) {
+        throw new Error("No access token available for session establishment");
+      }
+
+      // Make a request to userinfo endpoint to establish session
+      // The backend should create session cookies when this endpoint is accessed
+      await apiClient.get("/userinfo", {
+        params: {
+          access_token: accessToken,
+        },
+        headers: {
+          // Also include in Authorization header as backup
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+      
+      console.log("Session established successfully");
+    } catch (error) {
+      console.warn("Failed to establish session:", error);
+      throw error;
     }
   }
 
@@ -150,6 +241,13 @@ export class BlitzWareAuthClient {
           // Continue with local logout even if logout request fails
           console.warn("Logout request failed:", logoutError);
         }
+      }
+
+      // Clear cookies
+      try {
+        await CookieManager.clearAll();
+      } catch (error) {
+        console.warn("Failed to clear cookies:", error);
       }
 
       // Clear all stored data
