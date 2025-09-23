@@ -21,6 +21,7 @@ import axios from "axios";
 import { Buffer } from "buffer";
 
 const BASE_URL = "https://auth.blitzware.xyz/api/auth";
+const COOKIE_DOMAIN = "auth.blitzware.xyz"; // Extract just the hostname for cookie storage
 
 // Custom cookie management for Expo compatibility
 class ExpoCookieManager {
@@ -32,7 +33,8 @@ class ExpoCookieManager {
       existingCookies[name] = { value, domain, expires: Date.now() + 7 * 24 * 60 * 60 * 1000 }; // 7 days
       
       await AsyncStorage.setItem(`${this.COOKIE_STORAGE_KEY}_${domain}`, JSON.stringify(existingCookies));
-      console.log('🍪 Stored cookie:', name, '=', value, 'for', domain);
+      console.log('🍪 Stored cookie:', name, '=', value, 'for domain:', domain);
+      console.log('🍪 All cookies for domain:', existingCookies);
     } catch (error) {
       console.warn('Failed to store cookie:', error);
     }
@@ -100,7 +102,10 @@ const createApiClient = () => {
   client.interceptors.request.use(async (config) => {
     try {
       // Get cookies for the domain
-      const cookies = await ExpoCookieManager.getCookies(BASE_URL);
+      const cookies = await ExpoCookieManager.getCookies(COOKIE_DOMAIN);
+      
+      console.log('📤 Request interceptor - checking cookies for:', COOKIE_DOMAIN);
+      console.log('📤 Found cookies:', cookies);
       
       if (cookies && Object.keys(cookies).length > 0) {
         // Convert cookies object to cookie string
@@ -110,6 +115,8 @@ const createApiClient = () => {
         
         config.headers.Cookie = cookieString;
         console.log('📤 Sending cookies:', cookieString);
+      } else {
+        console.log('📤 No cookies found to send');
       }
     } catch (error) {
       console.warn('Failed to get cookies:', error);
@@ -129,8 +136,9 @@ const createApiClient = () => {
           console.log('📥 Received cookies:', setCookieHeader);
           for (const cookieString of setCookieHeader) {
             const cookies = ExpoCookieManager.parseCookiesFromSetCookie(cookieString);
+            console.log('📥 Parsed cookies from header:', cookies);
             for (const cookie of cookies) {
-              await ExpoCookieManager.setCookie(BASE_URL, cookie.name, cookie.value);
+              await ExpoCookieManager.setCookie(COOKIE_DOMAIN, cookie.name, cookie.value);
             }
           }
         }
@@ -312,7 +320,7 @@ export class BlitzWareAuthClient {
 
       // Clear cookies
       try {
-        await ExpoCookieManager.clearAllCookies();
+        await ExpoCookieManager.clearCookies(COOKIE_DOMAIN);
       } catch (error) {
         console.warn("Failed to clear cookies:", error);
       }
