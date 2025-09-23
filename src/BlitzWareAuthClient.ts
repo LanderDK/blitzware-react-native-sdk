@@ -25,27 +25,11 @@ const BASE_URL = "https://auth.blitzware.xyz/api/auth";
 // Configure axios instance with credentials for session support
 const apiClient = axios.create({
   baseURL: BASE_URL,
+  withCredentials: true, // Include session cookies in all requests - DOES NOT WORK
   headers: {
     "Content-Type": "application/json",
   },
 });
-
-apiClient.interceptors.request.use((config) => {
-  config.withCredentials = true; // Include session cookies in all requests
-  return config;
-});
-
-apiClient.interceptors.response.use(
-  (response) => {
-    // Show all cookies for debugging
-    console.log("Cookies:", response.headers["set-cookie"]);
-    return response;
-  },
-  (error) => {
-    // Handle errors
-    return Promise.reject(error);
-  }
-);
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: "@blitzware/access_token",
@@ -183,7 +167,7 @@ export class BlitzWareAuthClient {
     try {
       // First check if we have a token locally that appears valid
       const isLocallyValid = await this.isTokenValidLocally();
-      
+
       if (!isLocallyValid) {
         // Token is expired or missing locally, try to refresh
         try {
@@ -196,7 +180,7 @@ export class BlitzWareAuthClient {
 
       // Now validate with server to be sure
       const isServerValid = await this.isAuthenticated();
-      
+
       if (!isServerValid) {
         // Server says token is invalid, try to refresh
         try {
@@ -298,7 +282,7 @@ export class BlitzWareAuthClient {
     try {
       // First ensure we have a valid token
       const accessToken = await this.getAccessToken();
-      
+
       if (!accessToken) {
         return null;
       }
@@ -315,7 +299,7 @@ export class BlitzWareAuthClient {
       // No stored user or need fresh data, fetch from server
       const user = await this.fetchUserInfo();
       await this.storeUser(user);
-      
+
       return user;
     } catch (error) {
       console.warn("Failed to get user:", error);
