@@ -195,10 +195,8 @@ export const BlitzWareAuthProvider: React.FC<BlitzWareProviderProps> = ({
         return false;
       }
 
-      return authState.user.roles.some((userRole) =>
-        typeof userRole === "string"
-          ? userRole.toLowerCase() === role.toLowerCase()
-          : userRole.name?.toLowerCase() === role.toLowerCase()
+      return authState.user.roles.some(
+        (userRole) => userRole.toLowerCase() === role.toLowerCase()
       );
     },
     [authState.user]

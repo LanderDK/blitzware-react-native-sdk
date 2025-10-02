@@ -23,7 +23,7 @@ export default function RootLayout() {
   const blitzWareConfig: BlitzWareConfig = {
     clientId: "your-client-id",
     redirectUri: "yourapp://oauth", // Must match your app scheme
-    responseType: "code", // OAuth 2.0 authorization code flow
+    responseType: "code", // or "token" for implicit flow
   };
 
   return (

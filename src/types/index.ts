@@ -1,17 +1,9 @@
 export interface BlitzWareUser {
-  sub: string;
-  email?: string;
-  name?: string;
-  username?: string;
-  picture?: string;
-  roles?: string[] | Role[];
-  [key: string]: any;
-}
-
-export interface Role {
   id: string;
-  name: string;
-  description?: string;
+  email: string;
+  username: string;
+  roles: string[];
+  [key: string]: any;
 }
 
 export interface BlitzWareConfig {

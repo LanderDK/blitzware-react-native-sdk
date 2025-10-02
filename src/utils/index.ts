@@ -1,40 +1,47 @@
-import { BlitzWareUser, Role } from '../types';
+import { BlitzWareUser } from "../types";
 
 /**
  * Check if user has a specific role
  */
-export const hasRole = (user: BlitzWareUser | null, roleName: string): boolean => {
+export const hasRole = (
+  user: BlitzWareUser | null,
+  roleName: string
+): boolean => {
   if (!user || !user.roles) {
     return false;
   }
 
-  return user.roles.some(role => 
-    typeof role === 'string' 
-      ? role.toLowerCase() === roleName.toLowerCase()
-      : role.name?.toLowerCase() === roleName.toLowerCase()
+  return user.roles.some(
+    (role) => role.toLowerCase() === roleName.toLowerCase()
   );
 };
 
 /**
  * Check if user has any of the specified roles
  */
-export const hasAnyRole = (user: BlitzWareUser | null, roleNames: string[]): boolean => {
+export const hasAnyRole = (
+  user: BlitzWareUser | null,
+  roleNames: string[]
+): boolean => {
   if (!user || !user.roles || roleNames.length === 0) {
     return false;
   }
 
-  return roleNames.some(roleName => hasRole(user, roleName));
+  return roleNames.some((roleName) => hasRole(user, roleName));
 };
 
 /**
  * Check if user has all of the specified roles
  */
-export const hasAllRoles = (user: BlitzWareUser | null, roleNames: string[]): boolean => {
+export const hasAllRoles = (
+  user: BlitzWareUser | null,
+  roleNames: string[]
+): boolean => {
   if (!user || !user.roles || roleNames.length === 0) {
     return false;
   }
 
-  return roleNames.every(roleName => hasRole(user, roleName));
+  return roleNames.every((roleName) => hasRole(user, roleName));
 };
 
 /**
@@ -45,9 +52,7 @@ export const getUserRoles = (user: BlitzWareUser | null): string[] => {
     return [];
   }
 
-  return user.roles.map(role => 
-    typeof role === 'string' ? role : role.name || ''
-  ).filter(Boolean);
+  return user.roles.map((role) => role).filter(Boolean);
 };
 
 /**
@@ -55,10 +60,10 @@ export const getUserRoles = (user: BlitzWareUser | null): string[] => {
  */
 export const getUserDisplayName = (user: BlitzWareUser | null): string => {
   if (!user) {
-    return 'Anonymous';
+    return "Anonymous";
   }
 
-  return user.name || user.username || user.email || 'User';
+  return user.username || user.email || "User";
 };
 
 /**
@@ -76,13 +81,14 @@ export const isTokenExpired = (expiresAt: number | undefined): boolean => {
  * Create a secure random string
  */
 export const generateRandomString = (length: number = 43): string => {
-  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-  let result = '';
-  
+  const charset =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+  let result = "";
+
   for (let i = 0; i < length; i++) {
     result += charset.charAt(Math.floor(Math.random() * charset.length));
   }
-  
+
   return result;
 };
 
@@ -93,28 +99,30 @@ export const validateConfig = (config: any): string[] => {
   const errors: string[] = [];
 
   if (!config) {
-    errors.push('Configuration is required');
+    errors.push("Configuration is required");
     return errors;
   }
 
   if (!config.clientId) {
-    errors.push('clientId is required');
+    errors.push("clientId is required");
   }
 
   if (!config.redirectUri) {
-    errors.push('redirectUri is required');
+    errors.push("redirectUri is required");
   }
 
   // Validate redirect URI format
-  if (config.redirectUri && !config.redirectUri.includes('://')) {
-    errors.push('redirectUri must include a valid scheme (e.g., myapp://callback)');
+  if (config.redirectUri && !config.redirectUri.includes("://")) {
+    errors.push(
+      "redirectUri must include a valid scheme (e.g., myapp://callback)"
+    );
   }
 
   // Warn about implicit flow on mobile (security consideration)
   if (config.responseType === "token") {
     console.warn(
       'BlitzWare: Using responseType "token" (implicit flow) on mobile is less secure. ' +
-      'Consider using "code" (authorization code + PKCE) for better security.'
+        'Consider using "code" (authorization code + PKCE) for better security.'
     );
   }
 
