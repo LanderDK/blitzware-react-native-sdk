@@ -31,7 +31,6 @@ export {
 // Type exports
 export type {
   BlitzWareUser,
-  Role,
   BlitzWareConfig,
   AuthState,
   TokenSet,

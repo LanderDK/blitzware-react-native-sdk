@@ -331,10 +331,8 @@ export class BlitzWareAuthClient {
         return false;
       }
 
-      return user.roles.some((role) =>
-        typeof role === "string"
-          ? role.toLowerCase() === roleName.toLowerCase()
-          : role.name?.toLowerCase() === roleName.toLowerCase()
+      return user.roles.some(
+        (role) => role.toLowerCase() === roleName.toLowerCase()
       );
     } catch (error) {
       return false;
