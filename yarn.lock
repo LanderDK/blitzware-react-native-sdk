@@ -1974,10 +1974,10 @@ expo-linking@~7.1.7:
     expo-constants "~17.1.7"
     invariant "^2.2.4"
 
-expo-secure-store@^14.0.0:
-  version "14.2.4"
-  resolved "https://registry.yarnpkg.com/expo-secure-store/-/expo-secure-store-14.2.4.tgz#673743567a6459fb4b5f9406d57d9a3b16bca69f"
-  integrity sha512-ePaz4fnTitJJZjAiybaVYGfLWWyaEtepZC+vs9ZBMhQMfG5HUotIcVsDaSo3FnwpHmgwsLVPY2qFeryI6AtULw==
+expo-secure-store@^15.0.7:
+  version "15.0.7"
+  resolved "https://registry.yarnpkg.com/expo-secure-store/-/expo-secure-store-15.0.7.tgz#f74f928029889b8a32c0eafc2a214abee1e8b71e"
+  integrity sha512-9q7+G1Zxr5P6J5NRIlm86KulvmYwc6UnQlYPjQLDu1drDnerz6AT6l884dPu29HgtDTn4rR0heYeeGFhMKM7/Q==
 
 expo-web-browser@~14.2.0:
   version "14.2.0"
