@@ -75,6 +75,9 @@ export default function RootLayout() {
     clientId: "your-client-id",
     redirectUri: "yourapp://oauth", // Must match your app scheme
     responseType: "code", // OAuth 2.0 authorization code flow
+    // Optional managed auth domain from the BlitzWare dashboard.
+    // Defaults to https://auth.blitzware.xyz/api/auth/
+    authBaseUrl: "https://acme.auth.blitzware.xyz/api/auth/",
   };
 
   return (
@@ -406,8 +409,13 @@ interface BlitzWareConfig {
   clientId: string;           // Your BlitzWare client ID
   redirectUri: string;        // OAuth redirect URI (must match app scheme)
   responseType?: 'code';      // OAuth flow type (code is recommended)
+  authBaseUrl?: string;       // Optional managed auth domain base URL
 }
 ```
+
+`authBaseUrl` is optional. Omit it to keep using `https://auth.blitzware.xyz/api/auth/`; set it to the managed auth domain shown in the BlitzWare dashboard, such as `https://acme.auth.blitzware.xyz/api/auth/`.
+
+If Google, Microsoft, Discord, or another social provider is enabled, add the managed-domain callback URL in that provider's settings before switching users to the managed domain. This option does not require JWKS, ID tokens, or OIDC discovery configuration.
 
 ### User Object
 

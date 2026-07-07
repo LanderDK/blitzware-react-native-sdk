@@ -10,6 +10,7 @@ export interface BlitzWareConfig {
   clientId: string;
   redirectUri: string;
   responseType?: "code" | "token";
+  authBaseUrl?: string;
 }
 
 export interface TokenIntrospectionResponse {

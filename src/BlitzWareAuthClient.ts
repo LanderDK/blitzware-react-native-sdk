@@ -20,16 +20,27 @@ import {
 import axios from "axios";
 import { Buffer } from "buffer";
 
-const BASE_URL = "https://auth.blitzware.xyz/api/auth";
+const DEFAULT_AUTH_BASE_URL = "https://auth.blitzware.xyz/api/auth/";
 
-// Configure axios instance with credentials for session support
-const apiClient = axios.create({
-  baseURL: BASE_URL,
-  withCredentials: true, // Include session cookies in all requests - DOES NOT WORK
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
+const normalizeAuthBaseUrl = (authBaseUrl?: string): string => {
+  const value = authBaseUrl || DEFAULT_AUTH_BASE_URL;
+
+  try {
+    const url = new URL(value);
+    url.pathname = url.pathname.replace(/\/+$/, "") + "/";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    throw new BlitzWareError(
+      "Invalid authBaseUrl",
+      AuthErrorCode.CONFIGURATION_ERROR
+    );
+  }
+};
+
+const buildAuthUrl = (authBaseUrl: string, path: string): string =>
+  `${authBaseUrl}${path.replace(/^\/+/, "")}`;
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: "@blitzware/access_token",
@@ -48,9 +59,21 @@ const SECURE_STORE_KEYS = {
 export class BlitzWareAuthClient {
   private config: BlitzWareConfig;
   private discovery: AuthSession.DiscoveryDocument | null = null;
+  private authBaseUrl: string;
 
   constructor(config: BlitzWareConfig) {
     this.config = config;
+    this.authBaseUrl = normalizeAuthBaseUrl(config.authBaseUrl);
+  }
+
+  private createApiClient() {
+    return axios.create({
+      baseURL: this.authBaseUrl,
+      withCredentials: true, // Include session cookies in all requests - DOES NOT WORK
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
   }
 
   /**
@@ -60,15 +83,17 @@ export class BlitzWareAuthClient {
     if (!this.discovery) {
       try {
         // Try to fetch discovery document
-        this.discovery = await AuthSession.fetchDiscoveryAsync(BASE_URL);
+        this.discovery = await AuthSession.fetchDiscoveryAsync(
+          this.authBaseUrl
+        );
       } catch (error) {
         // Fallback to manual configuration if discovery fails
         this.discovery = {
-          authorizationEndpoint: `${BASE_URL}/authorize`,
-          tokenEndpoint: `${BASE_URL}/token`,
-          revocationEndpoint: `${BASE_URL}/revoke`,
-          userInfoEndpoint: `${BASE_URL}/userinfo`,
-          endSessionEndpoint: `${BASE_URL}/logout`,
+          authorizationEndpoint: buildAuthUrl(this.authBaseUrl, "authorize"),
+          tokenEndpoint: buildAuthUrl(this.authBaseUrl, "token"),
+          revocationEndpoint: buildAuthUrl(this.authBaseUrl, "revoke"),
+          userInfoEndpoint: buildAuthUrl(this.authBaseUrl, "userinfo"),
+          endSessionEndpoint: buildAuthUrl(this.authBaseUrl, "logout"),
         };
       }
     }
@@ -139,7 +164,7 @@ export class BlitzWareAuthClient {
 
       if (accessToken) {
         try {
-          const response = await apiClient.post("/logout", {
+          const response = await this.createApiClient().post("logout", {
             client_id: this.config.clientId,
           });
 
@@ -366,7 +391,7 @@ export class BlitzWareAuthClient {
         );
       }
 
-      const response = await apiClient.get("/userinfo", {
+      const response = await this.createApiClient().get("userinfo", {
         params: {
           access_token: accessToken,
         },
@@ -489,7 +514,10 @@ export class BlitzWareAuthClient {
         client_id: this.config.clientId,
       };
 
-      const response = await apiClient.post("/introspect", requestBody);
+      const response = await this.createApiClient().post(
+        "introspect",
+        requestBody
+      );
 
       return response.data;
     } catch (error) {
