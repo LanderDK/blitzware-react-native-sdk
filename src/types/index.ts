@@ -11,6 +11,7 @@ export interface BlitzWareConfig {
   redirectUri: string;
   responseType?: "code" | "token";
   authBaseUrl?: string;
+  scopes?: string[];
 }
 
 export interface TokenIntrospectionResponse {
@@ -37,8 +38,7 @@ export interface AuthState {
 export interface TokenSet {
   accessToken: string;
   refreshToken?: string;
-  // Note: ID tokens not supported by BlitzWare OAuth 2.0 service
-  // idToken?: string;
+  idToken?: string;
   tokenType?: string;
   expiresAt?: number;
   scope?: string;
@@ -47,8 +47,7 @@ export interface TokenSet {
 export interface AuthorizeResult {
   accessToken: string;
   refreshToken?: string;
-  // Note: ID tokens not supported by BlitzWare OAuth 2.0 service
-  // idToken?: string;
+  idToken?: string;
   tokenType?: string;
   accessTokenExpirationDate?: string;
   scope?: string;

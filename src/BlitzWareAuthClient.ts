@@ -21,6 +21,7 @@ import axios from "axios";
 import { Buffer } from "buffer";
 
 const DEFAULT_AUTH_BASE_URL = "https://auth.blitzware.xyz/api/auth/";
+const DEFAULT_SCOPES = ["openid", "profile", "email"];
 
 const normalizeAuthBaseUrl = (authBaseUrl?: string): string => {
   const value = authBaseUrl || DEFAULT_AUTH_BASE_URL;
@@ -45,8 +46,7 @@ const buildAuthUrl = (authBaseUrl: string, path: string): string =>
 const STORAGE_KEYS = {
   ACCESS_TOKEN: "@blitzware/access_token",
   REFRESH_TOKEN: "@blitzware/refresh_token",
-  // Note: ID tokens not supported by BlitzWare OAuth 2.0 service
-  // ID_TOKEN: '@blitzware/id_token',
+  ID_TOKEN: "@blitzware/id_token",
   USER: "@blitzware/user",
   TOKEN_EXPIRY: "@blitzware/token_expiry",
 } as const;
@@ -110,7 +110,7 @@ export class BlitzWareAuthClient {
       // Create authorization request
       const request = new AuthSession.AuthRequest({
         clientId: this.config.clientId,
-        scopes: [],
+        scopes: this.config.scopes || DEFAULT_SCOPES,
         redirectUri: this.config.redirectUri,
         responseType: AuthSession.ResponseType.Code,
         usePKCE: true,
@@ -140,6 +140,7 @@ export class BlitzWareAuthClient {
       await this.storeTokens({
         accessToken: tokenResult.accessToken,
         refreshToken: tokenResult.refreshToken || undefined,
+        idToken: tokenResult.idToken || undefined,
         expiresAt: tokenResult.expiresIn
           ? Date.now() + tokenResult.expiresIn * 1000
           : undefined,
@@ -286,6 +287,7 @@ export class BlitzWareAuthClient {
       await this.storeTokens({
         accessToken: tokenResult.accessToken,
         refreshToken: tokenResult.refreshToken || refreshToken,
+        idToken: tokenResult.idToken || undefined,
         expiresAt: tokenResult.expiresIn
           ? Date.now() + tokenResult.expiresIn * 1000
           : undefined,
@@ -422,11 +424,9 @@ export class BlitzWareAuthClient {
         );
       }
 
-      // Store less sensitive data in AsyncStorage
-      // Note: ID tokens not supported by BlitzWare OAuth 2.0 service
-      // if (tokens.idToken) {
-      //   await AsyncStorage.setItem(STORAGE_KEYS.ID_TOKEN, tokens.idToken);
-      // }
+      if (tokens.idToken) {
+        await AsyncStorage.setItem(STORAGE_KEYS.ID_TOKEN, tokens.idToken);
+      }
 
       if (tokens.expiresAt) {
         await AsyncStorage.setItem(
@@ -454,9 +454,13 @@ export class BlitzWareAuthClient {
    * Get stored token (public method)
    */
   async getStoredToken(
-    type: "access_token" | "refresh_token"
+    type: "access_token" | "refresh_token" | "id_token"
   ): Promise<string | null> {
     try {
+      if (type === "id_token") {
+        return await AsyncStorage.getItem(STORAGE_KEYS.ID_TOKEN);
+      }
+
       return await SecureStore.getItemAsync(
         type === "access_token"
           ? SECURE_STORE_KEYS.ACCESS_TOKEN
@@ -478,8 +482,7 @@ export class BlitzWareAuthClient {
 
       // Clear AsyncStorage
       await AsyncStorage.multiRemove([
-        // Note: ID tokens not supported by BlitzWare OAuth 2.0 service
-        // STORAGE_KEYS.ID_TOKEN,
+        STORAGE_KEYS.ID_TOKEN,
         STORAGE_KEYS.USER,
         STORAGE_KEYS.TOKEN_EXPIRY,
       ]);
